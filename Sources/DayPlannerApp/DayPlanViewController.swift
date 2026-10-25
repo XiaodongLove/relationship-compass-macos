@@ -27,6 +27,7 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
     private var addField: NSTextField!
     private var captureField: NSTextField!
     private var gradientLayer: CAGradientLayer?
+    private var fuzzyPanel: FuzzyImportPanel?
 
     private enum Row {
         case event(Event)
@@ -95,10 +96,6 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         importButton.target = self
         importButton.action = #selector(importReminders)
         importButton.translatesAutoresizingMaskIntoConstraints = false
-        let fuzzyButton = Theme.quietButton("模糊导入")
-        fuzzyButton.target = self
-        fuzzyButton.action = #selector(showFuzzyImport)
-        fuzzyButton.translatesAutoresizingMaskIntoConstraints = false
 
         let datePicker = NSDatePicker()
         datePicker.datePickerStyle = .textFieldAndStepper
@@ -122,11 +119,18 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         captureButton.action = #selector(capture)
         captureButton.translatesAutoresizingMaskIntoConstraints = false
 
+        // Primary, always-visible entry — toolbar was too crowded and clipped this control.
+        let fuzzyButton = Theme.primaryButton("模糊导入今日工作…")
+        fuzzyButton.target = self
+        fuzzyButton.action = #selector(showFuzzyImport)
+        fuzzyButton.translatesAutoresizingMaskIntoConstraints = false
+        fuzzyButton.toolTip = "把一段模糊的工作描述拆成带优先级的任务清单"
+
         inboxHeading.font = Theme.sectionFont
         inboxHeading.textColor = Theme.ink
         inboxHeading.translatesAutoresizingMaskIntoConstraints = false
 
-        let toolStack = NSStackView(views: [todayButton, ritualButton, fuzzyButton, importButton, datePicker])
+        let toolStack = NSStackView(views: [todayButton, ritualButton, importButton, datePicker])
         toolStack.orientation = .horizontal
         toolStack.spacing = 8
         toolStack.alignment = .centerY
@@ -137,6 +141,7 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         headerBar.addSubview(subtitleLabel)
         headerBar.addSubview(toolStack)
 
+        composeBar.addSubview(fuzzyButton)
         composeBar.addSubview(addField)
         composeBar.addSubview(addButton)
         composeBar.addSubview(captureField)
@@ -164,20 +169,28 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
 
             titleLabel.topAnchor.constraint(equalTo: brandLabel.bottomAnchor, constant: 4),
             titleLabel.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: headerBar.trailingAnchor),
 
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
             subtitleLabel.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
-            subtitleLabel.bottomAnchor.constraint(equalTo: headerBar.bottomAnchor),
+            subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: headerBar.trailingAnchor),
 
-            toolStack.centerYAnchor.constraint(equalTo: brandLabel.centerYAnchor),
-            toolStack.trailingAnchor.constraint(equalTo: headerBar.trailingAnchor),
+            // Tools on their own row so they are never clipped by the brand title.
+            toolStack.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 10),
+            toolStack.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
+            toolStack.trailingAnchor.constraint(lessThanOrEqualTo: headerBar.trailingAnchor),
+            toolStack.bottomAnchor.constraint(equalTo: headerBar.bottomAnchor),
 
             composeBar.topAnchor.constraint(equalTo: headerBar.bottomAnchor, constant: 16),
             composeBar.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
             composeBar.trailingAnchor.constraint(equalTo: headerBar.trailingAnchor),
-            composeBar.heightAnchor.constraint(equalToConstant: 72),
+            composeBar.heightAnchor.constraint(equalToConstant: 110),
 
-            addField.topAnchor.constraint(equalTo: composeBar.topAnchor),
+            fuzzyButton.topAnchor.constraint(equalTo: composeBar.topAnchor),
+            fuzzyButton.leadingAnchor.constraint(equalTo: composeBar.leadingAnchor),
+            fuzzyButton.heightAnchor.constraint(equalToConstant: 28),
+
+            addField.topAnchor.constraint(equalTo: fuzzyButton.bottomAnchor, constant: 10),
             addField.leadingAnchor.constraint(equalTo: composeBar.leadingAnchor),
             addField.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -10),
             addField.heightAnchor.constraint(equalToConstant: 30),
@@ -292,33 +305,25 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
     }
 
     @objc private func showFuzzyImport() {
-        let alert = NSAlert()
-        alert.messageText = "模糊导入今日工作"
-        alert.informativeText = "粘贴一段对今天工作的描述。将按换行/编号/顿号拆成任务，并根据「紧急/有空」等词或出现顺序给出高/中/低优先级。"
-        alert.addButton(withTitle: "导入到所选日")
-        alert.addButton(withTitle: "取消")
-
-        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 420, height: 160))
-        scroll.hasVerticalScroller = true
-        scroll.borderType = .bezelBorder
-        let textView = NSTextView(frame: scroll.bounds)
-        textView.isRichText = false
-        textView.font = Theme.bodyFont
-        textView.string = ""
-        textView.autoresizingMask = [.width, .height]
-        scroll.documentView = textView
-        alert.accessoryView = scroll
-
-        let response = alert.runModal()
-        guard response == .alertFirstButtonReturn else { return }
-        let text = textView.string
-        let created = model.importFuzzyDescription(text)
-        if created.isEmpty {
-            let tip = NSAlert()
-            tip.messageText = "没有识别到任务"
-            tip.informativeText = "试试换行分条，或写「1. … 2. …」。也可用「紧急」「有空」标优先级。"
-            tip.addButton(withTitle: "好")
-            tip.runModal()
+        let presenter = FuzzyImportPanel()
+        fuzzyPanel = presenter
+        presenter.present(from: view.window) { [weak self] text in
+            guard let self else { return }
+            self.fuzzyPanel = nil
+            let created = self.model.importFuzzyDescription(text)
+            if created.isEmpty {
+                let tip = NSAlert()
+                tip.messageText = "没有识别到任务"
+                tip.informativeText = "试试换行分条，或写「1. … 2. …」。也可用「紧急」「有空」标优先级。"
+                tip.addButton(withTitle: "好")
+                tip.runModal()
+            } else {
+                let tip = NSAlert()
+                tip.messageText = "已导入 \(created.count) 条任务"
+                tip.informativeText = "可在列表中查看优先级，并继续调整。"
+                tip.addButton(withTitle: "好")
+                tip.runModal()
+            }
         }
     }
 

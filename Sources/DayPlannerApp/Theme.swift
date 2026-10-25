@@ -44,7 +44,8 @@ enum Theme {
     static func quietButton(_ title: String) -> NSButton {
         let button = NSButton()
         button.title = title
-        button.bezelStyle = .flexiblePush
+        // `.rounded` keeps a visible bezel; `.flexiblePush` was easy to miss in dense toolbars.
+        button.bezelStyle = .rounded
         button.isBordered = true
         button.setButtonType(.momentaryPushIn)
         button.font = captionFont
