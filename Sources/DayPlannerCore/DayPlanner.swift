@@ -129,6 +129,10 @@ public final class DayPlanner: @unchecked Sendable {
         mutateTask(taskID) { task in
             task.promisedDay = dayStart
             task.sortOrder = nextOrder
+            if let fire = task.reminderFireDate {
+                notifier.cancel(taskID: task.id)
+                notifier.schedule(taskID: task.id, title: task.title, at: fire)
+            }
         }
     }
 

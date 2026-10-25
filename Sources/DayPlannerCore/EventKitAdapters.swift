@@ -33,10 +33,8 @@ public final class EventKitRemindersReading: RemindersReading, @unchecked Sendab
     public func unfinishedReminders() -> [SystemReminder] {
         let status = EKEventStore.authorizationStatus(for: .reminder)
         guard status == .fullAccess else { return [] }
-        let cal = Calendar.current
-        let start = cal.date(byAdding: .year, value: -1, to: Date()) ?? Date.distantPast
-        let end = cal.date(byAdding: .year, value: 1, to: Date()) ?? Date.distantFuture
-        let predicate = store.predicateForIncompleteReminders(withDueDateStarting: start, ending: end, calendars: nil)
+        // nil due-date bounds include unfinished reminders with no due date
+        let predicate = store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil)
         var result: [SystemReminder] = []
         let sem = DispatchSemaphore(value: 0)
         store.fetchReminders(matching: predicate) { reminders in
