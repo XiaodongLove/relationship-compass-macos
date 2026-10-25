@@ -5,14 +5,14 @@ public final class DayPlanner: @unchecked Sendable {
     private let clock: any Clock
     private let calendar: any CalendarReading
     private let reminders: any RemindersReading
-    private let notifier: any TaskNotifying
+    private let notifier: TaskNotifying
 
     public init(
         store: PlannerStore,
         clock: any Clock = SystemClock(),
         calendar: any CalendarReading = EmptyCalendarReading(),
         reminders: any RemindersReading = EmptyRemindersReading(),
-        notifier: any TaskNotifying = NoOpTaskNotifying()
+        notifier: TaskNotifying = NoOpTaskNotifying()
     ) {
         self.store = store
         self.clock = clock
@@ -45,6 +45,144 @@ public final class DayPlanner: @unchecked Sendable {
         return store.loadTasks()
             .filter { !$0.isCompleted && $0.promisedDay < today }
             .sorted { $0.promisedDay < $1.promisedDay }
+    }
+
+    @discardableResult
+    public func createTask(title: String, on day: Date) -> Task {
+        var tasks = store.loadTasks()
+        let dayStart = Calendar.current.startOfDay(for: day)
+        let nextOrder = (tasks.filter { Calendar.current.isDate($0.promisedDay, inSameDayAs: dayStart) }.map(\.sortOrder).max() ?? -1) + 1
+        let task = Task(title: title, promisedDay: dayStart, sortOrder: nextOrder)
+        tasks.append(task)
+        store.saveTasks(tasks)
+        return task
+    }
+
+    public func complete(taskID: TaskID) {
+        mutateTask(taskID) { $0.isCompleted = true }
+        notifier.cancel(taskID: taskID)
+    }
+
+    public func uncomplete(taskID: TaskID) {
+        mutateTask(taskID) { task in
+            task.isCompleted = false
+            if let fire = task.reminderFireDate {
+                notifier.schedule(taskID: task.id, title: task.title, at: fire)
+            }
+        }
+    }
+
+    func mutateTask(_ id: TaskID, _ body: (inout Task) -> Void) {
+        var tasks = store.loadTasks()
+        guard let idx = tasks.firstIndex(where: { $0.id == id }) else { return }
+        body(&tasks[idx])
+        store.saveTasks(tasks)
+    }
+
+    @discardableResult
+    public func capture(title: String, sourceReminderID: String? = nil) -> InboxItem {
+        var inbox = store.loadInbox()
+        let item = InboxItem(title: title, sourceReminderID: sourceReminderID)
+        inbox.append(item)
+        store.saveInbox(inbox)
+        return item
+    }
+
+    public func deleteInboxItem(id: InboxItemID) {
+        store.saveInbox(store.loadInbox().filter { $0.id != id })
+    }
+
+    @discardableResult
+    public func commitToDay(inboxItemID: InboxItemID, day: Date) -> Task? {
+        var inbox = store.loadInbox()
+        guard let idx = inbox.firstIndex(where: { $0.id == inboxItemID }) else { return nil }
+        let item = inbox.remove(at: idx)
+        store.saveInbox(inbox)
+        var tasks = store.loadTasks()
+        let dayStart = Calendar.current.startOfDay(for: day)
+        let nextOrder = (tasks.filter { Calendar.current.isDate($0.promisedDay, inSameDayAs: dayStart) }.map(\.sortOrder).max() ?? -1) + 1
+        let task = Task(
+            title: item.title,
+            promisedDay: dayStart,
+            sortOrder: nextOrder,
+            sourceReminderID: item.sourceReminderID
+        )
+        tasks.append(task)
+        store.saveTasks(tasks)
+        return task
+    }
+
+    public func returnToInbox(taskID: TaskID) {
+        var tasks = store.loadTasks()
+        guard let idx = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        let task = tasks.remove(at: idx)
+        store.saveTasks(tasks)
+        notifier.cancel(taskID: taskID)
+        _ = capture(title: task.title, sourceReminderID: task.sourceReminderID)
+    }
+
+    public func changePromisedDay(taskID: TaskID, to day: Date) {
+        let dayStart = Calendar.current.startOfDay(for: day)
+        let nextOrder = (store.loadTasks()
+            .filter { $0.id != taskID && Calendar.current.isDate($0.promisedDay, inSameDayAs: dayStart) }
+            .map(\.sortOrder).max() ?? -1) + 1
+        mutateTask(taskID) { task in
+            task.promisedDay = dayStart
+            task.sortOrder = nextOrder
+        }
+    }
+
+    public func reorder(taskIDs: [TaskID], on day: Date) {
+        let dayStart = Calendar.current.startOfDay(for: day)
+        var tasks = store.loadTasks()
+        for (index, id) in taskIDs.enumerated() {
+            guard let idx = tasks.firstIndex(where: { $0.id == id }) else { continue }
+            guard Calendar.current.isDate(tasks[idx].promisedDay, inSameDayAs: dayStart) else { continue }
+            tasks[idx].sortOrder = index
+        }
+        store.saveTasks(tasks)
+    }
+
+    public func setSoftWindow(taskID: TaskID, window: SoftWindow?) {
+        mutateTask(taskID) { $0.softWindow = window }
+    }
+
+    public func setReminder(taskID: TaskID, at fireDate: Date?) {
+        mutateTask(taskID) { task in
+            task.reminderFireDate = fireDate
+            if let fireDate {
+                notifier.schedule(taskID: task.id, title: task.title, at: fireDate)
+            } else {
+                notifier.cancel(taskID: task.id)
+            }
+        }
+    }
+
+    @discardableResult
+    public func importReminders() -> [InboxItem] {
+        let existingIDs = Set(
+            store.loadInbox().compactMap(\.sourceReminderID)
+                + store.loadTasks().compactMap(\.sourceReminderID)
+        )
+        var created: [InboxItem] = []
+        for reminder in reminders.unfinishedReminders() {
+            guard !existingIDs.contains(reminder.id) else { continue }
+            created.append(capture(title: reminder.title, sourceReminderID: reminder.id))
+        }
+        return created
+    }
+
+    public func planningRitualSnapshot() -> PlanningRitualSnapshot {
+        PlanningRitualSnapshot(inbox: inboxItems(), overdue: overdueTasks())
+    }
+}
+
+public struct PlanningRitualSnapshot: Equatable, Sendable {
+    public var inbox: [InboxItem]
+    public var overdue: [Task]
+    public init(inbox: [InboxItem], overdue: [Task]) {
+        self.inbox = inbox
+        self.overdue = overdue
     }
 }
 

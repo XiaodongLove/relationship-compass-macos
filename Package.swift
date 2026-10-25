@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "DayPlannerCore", targets: ["DayPlannerCore"]),
         .executable(name: "DayPlanner", targets: ["DayPlannerApp"]),
+        .executable(name: "DayPlannerTests", targets: ["DayPlannerTests"]),
     ],
     targets: [
         .target(name: "DayPlannerCore"),
@@ -14,9 +15,10 @@ let package = Package(
             name: "DayPlannerApp",
             dependencies: ["DayPlannerCore"]
         ),
-        .testTarget(
-            name: "DayPlannerCoreTests",
-            dependencies: ["DayPlannerCore"]
+        .executableTarget(
+            name: "DayPlannerTests",
+            dependencies: ["DayPlannerCore"],
+            path: "Tests/DayPlannerCoreTests"
         ),
     ]
 )

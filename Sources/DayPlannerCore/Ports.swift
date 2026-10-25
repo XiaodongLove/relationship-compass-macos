@@ -29,12 +29,12 @@ public struct EmptyRemindersReading: RemindersReading {
     public func unfinishedReminders() -> [SystemReminder] { [] }
 }
 
-public protocol TaskNotifying: Sendable {
+public protocol TaskNotifying: AnyObject {
     func schedule(taskID: TaskID, title: String, at fireDate: Date)
     func cancel(taskID: TaskID)
 }
 
-public struct NoOpTaskNotifying: TaskNotifying {
+public final class NoOpTaskNotifying: TaskNotifying {
     public init() {}
     public func schedule(taskID: TaskID, title: String, at fireDate: Date) {}
     public func cancel(taskID: TaskID) {}
