@@ -22,6 +22,7 @@ public final class FilePlannerStore: PlannerStore, @unchecked Sendable {
         var promisedDay: Date
         var isCompleted: Bool
         var sortOrder: Int
+        var priority: Priority?
         var softWindow: SoftWindow?
         var reminderFireDate: Date?
         var sourceReminderID: String?
@@ -58,6 +59,7 @@ public final class FilePlannerStore: PlannerStore, @unchecked Sendable {
                     promisedDay: $0.promisedDay,
                     isCompleted: $0.isCompleted,
                     sortOrder: $0.sortOrder,
+                    priority: $0.priority ?? .medium,
                     softWindow: $0.softWindow,
                     reminderFireDate: $0.reminderFireDate,
                     sourceReminderID: $0.sourceReminderID
@@ -76,6 +78,7 @@ public final class FilePlannerStore: PlannerStore, @unchecked Sendable {
                     promisedDay: $0.promisedDay,
                     isCompleted: $0.isCompleted,
                     sortOrder: $0.sortOrder,
+                    priority: $0.priority,
                     softWindow: $0.softWindow,
                     reminderFireDate: $0.reminderFireDate,
                     sourceReminderID: $0.sourceReminderID

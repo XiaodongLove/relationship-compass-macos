@@ -102,4 +102,16 @@ final class AppModel {
         planner.changePromisedDay(taskID: task.id, to: Calendar.current.startOfDay(for: Date()))
         refresh()
     }
+
+    @discardableResult
+    func importFuzzyDescription(_ text: String) -> [DayPlannerCore.Task] {
+        let created = planner.importFuzzyDescription(text, on: selectedDay)
+        refresh()
+        return created
+    }
+
+    func setPriority(_ task: DayPlannerCore.Task, _ priority: Priority) {
+        planner.setPriority(taskID: task.id, priority: priority)
+        refresh()
+    }
 }

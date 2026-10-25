@@ -14,6 +14,7 @@ public enum DayPlannerSuite {
         taskReminders(counter)
         remindersImportDedupe(counter)
         ritualSurfaces(counter)
+        fuzzyImport(counter)
         if counter.failures == 0 {
             print("All tests passed.")
         } else {
@@ -207,5 +208,33 @@ private func ritualSurfaces(_ c: Counter) {
         let ritual = planner2.planningRitualSnapshot()
         c.expect(ritual.inbox.count == 1, "ritual inbox")
         c.expect(ritual.overdue.count == 1, "ritual overdue")
+    }
+}
+
+private func fuzzyImport(_ c: Counter) {
+    section("fuzzy import") {
+        let clock = FixedClock(now: date(2026, 10, 25, 9, 0))
+        let planner = makePlanner(clock: clock)
+
+        let empty = planner.importFuzzyDescription("   \n  ", on: clock.today)
+        c.expect(empty.isEmpty, "blank input creates nothing")
+
+        let text = """
+        今天紧急把周报发出去
+        还要开产品同步会
+        有空整理一下桌面文件
+        """
+        let created = planner.importFuzzyDescription(text, on: clock.today)
+        c.expect(created.count == 3, "three tasks from lines")
+        c.expect(created.contains(where: { $0.title.contains("周报") && $0.priority == .high }), "urgent keyword → high")
+        c.expect(created.contains(where: { $0.title.contains("桌面") && $0.priority == .low }), "稍后/有空 → low")
+
+        let plan = planner.dayPlan(for: clock.today)
+        c.expect(plan.openTasks.first?.priority == .high, "day plan sorts high first")
+
+        let drafts = FuzzyImport.parse("1. 写方案\n2. 回复邮件\n3. 看书")
+        c.expect(drafts.count == 3, "numbered list")
+        c.expect(drafts[0].priority == .high, "positional first → high")
+        c.expect(drafts[2].priority == .low, "positional last → low")
     }
 }

@@ -47,3 +47,11 @@ _Avoid_: Sync, mirror, two-way link
 **Completed Task**:
 A Task marked done. It remains on that day's Day Plan in a completed section so the day is a record of what was finished, not only what remains.
 _Avoid_: Archived task, deleted task, checked item (UI only)
+
+**Priority**:
+The relative importance of a Task on a Day Plan: high, medium, or low. Used for ordering and display; not a project-management matrix.
+_Avoid_: Urgency score, P0/P1 (UI may show 高/中/低)
+
+**Fuzzy Import**:
+Turning a free-form description of today's work into one or more Tasks with assigned Priorities via local heuristics (not a cloud LLM).
+_Avoid_: AI plan, magic import, NLP pipeline (implementation detail)

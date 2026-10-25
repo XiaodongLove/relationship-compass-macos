@@ -95,6 +95,10 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         importButton.target = self
         importButton.action = #selector(importReminders)
         importButton.translatesAutoresizingMaskIntoConstraints = false
+        let fuzzyButton = Theme.quietButton("模糊导入")
+        fuzzyButton.target = self
+        fuzzyButton.action = #selector(showFuzzyImport)
+        fuzzyButton.translatesAutoresizingMaskIntoConstraints = false
 
         let datePicker = NSDatePicker()
         datePicker.datePickerStyle = .textFieldAndStepper
@@ -122,7 +126,7 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         inboxHeading.textColor = Theme.ink
         inboxHeading.translatesAutoresizingMaskIntoConstraints = false
 
-        let toolStack = NSStackView(views: [todayButton, ritualButton, importButton, datePicker])
+        let toolStack = NSStackView(views: [todayButton, ritualButton, fuzzyButton, importButton, datePicker])
         toolStack.orientation = .horizontal
         toolStack.spacing = 8
         toolStack.alignment = .centerY
@@ -287,6 +291,37 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         model.importReminders()
     }
 
+    @objc private func showFuzzyImport() {
+        let alert = NSAlert()
+        alert.messageText = "模糊导入今日工作"
+        alert.informativeText = "粘贴一段对今天工作的描述。将按换行/编号/顿号拆成任务，并根据「紧急/有空」等词或出现顺序给出高/中/低优先级。"
+        alert.addButton(withTitle: "导入到所选日")
+        alert.addButton(withTitle: "取消")
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 420, height: 160))
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        let textView = NSTextView(frame: scroll.bounds)
+        textView.isRichText = false
+        textView.font = Theme.bodyFont
+        textView.string = ""
+        textView.autoresizingMask = [.width, .height]
+        scroll.documentView = textView
+        alert.accessoryView = scroll
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        let text = textView.string
+        let created = model.importFuzzyDescription(text)
+        if created.isEmpty {
+            let tip = NSAlert()
+            tip.messageText = "没有识别到任务"
+            tip.informativeText = "试试换行分条，或写「1. … 2. …」。也可用「紧急」「有空」标优先级。"
+            tip.addButton(withTitle: "好")
+            tip.runModal()
+        }
+    }
+
     @objc private func runRitual() {
         let alert = NSAlert()
         alert.messageText = "日计划仪式"
@@ -430,6 +465,12 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         stack.spacing = 6
         stack.alignment = .centerY
 
+        let badge = NSTextField(labelWithString: priorityLabel(task.priority))
+        badge.font = Theme.captionFont
+        badge.textColor = priorityColor(task.priority)
+        badge.setContentHuggingPriority(.required, for: .horizontal)
+        stack.addArrangedSubview(badge)
+
         let check = NSButton(checkboxWithTitle: task.title, target: self, action: #selector(toggleTask(_:)))
         check.font = Theme.bodyFont
         check.state = completed ? .on : .off
@@ -441,9 +482,22 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
             check.title = "\(task.title)  · 与日程重叠"
         }
         stack.addArrangedSubview(check)
-        (stack.views.first as? NSView)?.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        check.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         if !completed {
+            let priorityMenu = NSPopUpButton()
+            priorityMenu.font = Theme.captionFont
+            priorityMenu.addItems(withTitles: ["优先级", "高", "中", "低"])
+            switch task.priority {
+            case .high: priorityMenu.selectItem(at: 1)
+            case .medium: priorityMenu.selectItem(at: 2)
+            case .low: priorityMenu.selectItem(at: 3)
+            }
+            priorityMenu.tag = row
+            priorityMenu.target = self
+            priorityMenu.action = #selector(priorityChanged(_:))
+            stack.addArrangedSubview(priorityMenu)
+
             let soft = NSPopUpButton()
             soft.font = Theme.captionFont
             soft.addItems(withTitles: ["软时段", "上午", "下午", "晚上", "清除"])
@@ -500,6 +554,32 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         case 3: model.setSoftWindow(task, .evening)
         case 4: model.setSoftWindow(task, nil)
         default: break
+        }
+    }
+
+    @objc private func priorityChanged(_ sender: NSPopUpButton) {
+        guard let task = taskAtRow(sender.tag) else { return }
+        switch sender.indexOfSelectedItem {
+        case 1: model.setPriority(task, .high)
+        case 2: model.setPriority(task, .medium)
+        case 3: model.setPriority(task, .low)
+        default: break
+        }
+    }
+
+    private func priorityLabel(_ priority: Priority) -> String {
+        switch priority {
+        case .high: return "高"
+        case .medium: return "中"
+        case .low: return "低"
+        }
+    }
+
+    private func priorityColor(_ priority: Priority) -> NSColor {
+        switch priority {
+        case .high: return NSColor(calibratedRed: 0.75, green: 0.28, blue: 0.22, alpha: 1)
+        case .medium: return Theme.accent
+        case .low: return Theme.muted
         }
     }
 

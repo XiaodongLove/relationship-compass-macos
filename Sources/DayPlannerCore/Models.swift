@@ -29,12 +29,23 @@ public enum SoftWindow: Equatable, Sendable, Codable {
     case clock(DateComponents)
 }
 
+public enum Priority: Int, Equatable, Sendable, Codable, Comparable {
+    case high = 0
+    case medium = 1
+    case low = 2
+
+    public static func < (lhs: Priority, rhs: Priority) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
 public struct Task: Equatable, Sendable, Identifiable {
     public let id: TaskID
     public var title: String
     public var promisedDay: Date
     public var isCompleted: Bool
     public var sortOrder: Int
+    public var priority: Priority
     public var softWindow: SoftWindow?
     public var reminderFireDate: Date?
     public var sourceReminderID: String?
@@ -45,6 +56,7 @@ public struct Task: Equatable, Sendable, Identifiable {
         promisedDay: Date,
         isCompleted: Bool = false,
         sortOrder: Int = 0,
+        priority: Priority = .medium,
         softWindow: SoftWindow? = nil,
         reminderFireDate: Date? = nil,
         sourceReminderID: String? = nil
@@ -54,9 +66,20 @@ public struct Task: Equatable, Sendable, Identifiable {
         self.promisedDay = Calendar.current.startOfDay(for: promisedDay)
         self.isCompleted = isCompleted
         self.sortOrder = sortOrder
+        self.priority = priority
         self.softWindow = softWindow
         self.reminderFireDate = reminderFireDate
         self.sourceReminderID = sourceReminderID
+    }
+}
+
+public struct FuzzyDraft: Equatable, Sendable {
+    public var title: String
+    public var priority: Priority
+
+    public init(title: String, priority: Priority) {
+        self.title = title
+        self.priority = priority
     }
 }
 

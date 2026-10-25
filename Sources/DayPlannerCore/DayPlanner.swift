@@ -24,8 +24,14 @@ public final class DayPlanner: @unchecked Sendable {
     public func dayPlan(for day: Date) -> DayPlan {
         let dayStart = Calendar.current.startOfDay(for: day)
         let tasks = store.loadTasks().filter { Calendar.current.isDate($0.promisedDay, inSameDayAs: dayStart) }
-        let open = tasks.filter { !$0.isCompleted }.sorted { $0.sortOrder < $1.sortOrder }
-        let completed = tasks.filter(\.isCompleted).sorted { $0.sortOrder < $1.sortOrder }
+        let open = tasks.filter { !$0.isCompleted }.sorted {
+            if $0.priority != $1.priority { return $0.priority < $1.priority }
+            return $0.sortOrder < $1.sortOrder
+        }
+        let completed = tasks.filter(\.isCompleted).sorted {
+            if $0.priority != $1.priority { return $0.priority < $1.priority }
+            return $0.sortOrder < $1.sortOrder
+        }
         let events = calendar.events(on: dayStart)
         return DayPlan(
             date: dayStart,
@@ -48,14 +54,26 @@ public final class DayPlanner: @unchecked Sendable {
     }
 
     @discardableResult
-    public func createTask(title: String, on day: Date) -> Task {
+    public func createTask(title: String, on day: Date, priority: Priority = .medium) -> Task {
         var tasks = store.loadTasks()
         let dayStart = Calendar.current.startOfDay(for: day)
         let nextOrder = (tasks.filter { Calendar.current.isDate($0.promisedDay, inSameDayAs: dayStart) }.map(\.sortOrder).max() ?? -1) + 1
-        let task = Task(title: title, promisedDay: dayStart, sortOrder: nextOrder)
+        let task = Task(title: title, promisedDay: dayStart, sortOrder: nextOrder, priority: priority)
         tasks.append(task)
         store.saveTasks(tasks)
         return task
+    }
+
+    /// Parses a fuzzy natural-language description into Tasks promised to `day`.
+    @discardableResult
+    public func importFuzzyDescription(_ text: String, on day: Date) -> [Task] {
+        let drafts = FuzzyImport.parse(text)
+        guard !drafts.isEmpty else { return [] }
+        return drafts.map { createTask(title: $0.title, on: day, priority: $0.priority) }
+    }
+
+    public func setPriority(taskID: TaskID, priority: Priority) {
+        mutateTask(taskID) { $0.priority = priority }
     }
 
     public func complete(taskID: TaskID) {
