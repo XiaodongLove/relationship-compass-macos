@@ -1,0 +1,3 @@
+# Local Inbox/Task is authoritative; system Reminders are import-only
+
+This app orchestrates a personal Day Plan on top of macOS Calendar/Reminders, but Inbox Items and Tasks live in a local store. System Reminders may be copied into the Inbox during an optional Planning Ritual step; after that copy there is no sync. We rejected making Reminders the source of truth (which would turn the app into a Today skin) and rejected ongoing mirroring (which blurs which store wins on edit/complete). Calendar Events remain read-only from the system calendar; Task Reminders are app-local notifications on Tasks only.
