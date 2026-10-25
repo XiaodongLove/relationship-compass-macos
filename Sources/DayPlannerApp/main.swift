@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.center()
-        window.title = "Day Planner"
+        window.title = "每日工作计划"
         window.contentViewController = content
         window.makeKeyAndOrderFront(nil)
         self.window = window
@@ -39,13 +39,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "DP"
-        item.button?.toolTip = "Day Planner Quick Capture"
+        item.button?.title = "计划"
+        item.button?.toolTip = "每日工作计划 · 快速捕获"
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Quick Capture…", action: #selector(showQuickCapture), keyEquivalent: "c"))
-        menu.addItem(NSMenuItem(title: "Show Day Plan", action: #selector(showWindow), keyEquivalent: "d"))
+        menu.addItem(NSMenuItem(title: "快速捕获…", action: #selector(showQuickCapture), keyEquivalent: "c"))
+        menu.addItem(NSMenuItem(title: "显示今日计划", action: #selector(showWindow), keyEquivalent: "d"))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
         statusItem = item
     }
@@ -63,14 +63,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 backing: .buffered,
                 defer: false
             )
-            panel.title = "Quick Capture"
+            panel.title = "快速捕获"
             panel.isFloatingPanel = true
             panel.level = .floating
             let field = NSTextField(frame: NSRect(x: 12, y: 16, width: 260, height: 24))
-            field.placeholderString = "Inbox item"
+            field.placeholderString = "写入收件箱…"
             field.tag = 42
             let button = NSButton(frame: NSRect(x: 280, y: 12, width: 64, height: 28))
-            button.title = "Add"
+            button.title = "添加"
             button.target = self
             button.action = #selector(submitCapture(_:))
             panel.contentView?.addSubview(field)

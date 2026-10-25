@@ -4,7 +4,7 @@ import DayPlannerCore
 final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
     private let model: AppModel
     private let titleLabel = NSTextField(labelWithString: "")
-    private let emptyLabel = NSTextField(labelWithString: "Empty Day Plan — add a task or capture to Inbox.")
+    private let emptyLabel = NSTextField(labelWithString: "今日计划为空 — 可添加任务，或先捕获到收件箱。")
     private let table = NSTableView()
     private let scroll = NSScrollView()
     private let inboxTable = NSTableView()
@@ -48,11 +48,11 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         scroll.translatesAutoresizingMaskIntoConstraints = false
         inboxScroll.translatesAutoresizingMaskIntoConstraints = false
 
-        let todayButton = NSButton(title: "Today", target: self, action: #selector(goToday))
+        let todayButton = NSButton(title: "今天", target: self, action: #selector(goToday))
         todayButton.translatesAutoresizingMaskIntoConstraints = false
-        let ritualButton = NSButton(title: "Planning Ritual", target: self, action: #selector(runRitual))
+        let ritualButton = NSButton(title: "日计划仪式", target: self, action: #selector(runRitual))
         ritualButton.translatesAutoresizingMaskIntoConstraints = false
-        let importButton = NSButton(title: "Import Reminders", target: self, action: #selector(importReminders))
+        let importButton = NSButton(title: "导入提醒事项", target: self, action: #selector(importReminders))
         importButton.translatesAutoresizingMaskIntoConstraints = false
 
         let datePicker = NSDatePicker()
@@ -64,15 +64,15 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         datePicker.translatesAutoresizingMaskIntoConstraints = false
         self.datePicker = datePicker
 
-        addField = makeField(placeholder: "New task for this day", action: #selector(addTask))
-        let addButton = NSButton(title: "Add Task", target: self, action: #selector(addTask))
+        addField = makeField(placeholder: "为当天新建任务", action: #selector(addTask))
+        let addButton = NSButton(title: "添加任务", target: self, action: #selector(addTask))
         addButton.translatesAutoresizingMaskIntoConstraints = false
 
-        captureField = makeField(placeholder: "Quick capture to Inbox", action: #selector(capture))
-        let captureButton = NSButton(title: "Capture", target: self, action: #selector(capture))
+        captureField = makeField(placeholder: "快速捕获到收件箱", action: #selector(capture))
+        let captureButton = NSButton(title: "捕获", target: self, action: #selector(capture))
         captureButton.translatesAutoresizingMaskIntoConstraints = false
 
-        let inboxLabel = NSTextField(labelWithString: "Inbox / Overdue")
+        let inboxLabel = NSTextField(labelWithString: "收件箱 / 逾期")
         inboxLabel.font = .boldSystemFont(ofSize: 13)
         inboxLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -97,14 +97,14 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
             addField.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -8),
             addButton.centerYAnchor.constraint(equalTo: addField.centerYAnchor),
             addButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            addButton.widthAnchor.constraint(equalToConstant: 88),
+            addButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 88),
 
             captureField.topAnchor.constraint(equalTo: addField.bottomAnchor, constant: 6),
             captureField.leadingAnchor.constraint(equalTo: addField.leadingAnchor),
             captureField.trailingAnchor.constraint(equalTo: captureButton.leadingAnchor, constant: -8),
             captureButton.centerYAnchor.constraint(equalTo: captureField.centerYAnchor),
             captureButton.trailingAnchor.constraint(equalTo: addButton.trailingAnchor),
-            captureButton.widthAnchor.constraint(equalToConstant: 88),
+            captureButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 72),
 
             scroll.topAnchor.constraint(equalTo: captureField.bottomAnchor, constant: 10),
             scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
@@ -173,9 +173,9 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
 
     @objc private func runRitual() {
         let alert = NSAlert()
-        alert.messageText = "Planning Ritual"
-        alert.informativeText = "Inbox: \(model.inbox.count) · Overdue: \(model.overdue.count)\nCommit inbox items to the selected day, or move overdue to today from the bottom list (double-click)."
-        alert.addButton(withTitle: "OK")
+        alert.messageText = "日计划仪式"
+        alert.informativeText = "收件箱：\(model.inbox.count) · 逾期：\(model.overdue.count)\n可将收件箱条目承诺到所选日期；底部列表双击可把逾期任务挪到今天。"
+        alert.addButton(withTitle: "好")
         alert.runModal()
         model.refresh()
     }
@@ -196,22 +196,23 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
 
     private func reload() {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateStyle = .full
         titleLabel.stringValue = formatter.string(from: model.plan.date)
 
         rows = []
         if !model.overdue.isEmpty && Calendar.current.isDateInToday(model.selectedDay) {
-            rows.append(.section("Overdue (triage)"))
+            rows.append(.section("逾期（待分拣）"))
             rows.append(contentsOf: model.overdue.map { .overdue($0) })
         }
         if !model.plan.events.isEmpty {
-            rows.append(.section("Events"))
+            rows.append(.section("日程"))
             rows.append(contentsOf: model.plan.events.map { .event($0) })
         }
-        rows.append(.section("Open"))
+        rows.append(.section("进行中"))
         rows.append(contentsOf: model.plan.openTasks.map { .open($0) })
         if !model.plan.completedTasks.isEmpty {
-            rows.append(.section("Completed"))
+            rows.append(.section("已完成"))
             rows.append(contentsOf: model.plan.completedTasks.map { .completed($0) })
         }
 
@@ -233,10 +234,10 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         if tableView === inboxTable {
             if row < model.inbox.count {
                 let item = model.inbox[row]
-                return NSTextField(labelWithString: "📥 \(item.title)  (double-click → today)")
+                return NSTextField(labelWithString: "📥 \(item.title)  （双击 → 承诺到所选日）")
             }
             let overdue = model.overdue[row - model.inbox.count]
-            return NSTextField(labelWithString: "⏰ \(overdue.title)  (double-click → today)")
+            return NSTextField(labelWithString: "⏰ \(overdue.title)  （双击 → 挪到今天）")
         }
 
         switch rows[row] {
@@ -246,14 +247,16 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
             label.textColor = .secondaryLabelColor
             return label
         case .event(let event):
-            let tf = DateFormatter(); tf.timeStyle = .short
+            let tf = DateFormatter()
+            tf.locale = Locale(identifier: "zh_CN")
+            tf.timeStyle = .short
             return NSTextField(labelWithString: "📅 \(event.title)  \(tf.string(from: event.start))–\(tf.string(from: event.end))")
         case .open(let task):
             return taskControl(task: task, completed: false, row: row)
         case .completed(let task):
             return taskControl(task: task, completed: true, row: row)
         case .overdue(let task):
-            let button = NSButton(title: "→ Today: \(task.title)", target: self, action: #selector(promoteOverdue(_:)))
+            let button = NSButton(title: "→ 今天：\(task.title)", target: self, action: #selector(promoteOverdue(_:)))
             button.tag = row
             return button
         }
@@ -267,23 +270,23 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         check.state = completed ? .on : .off
         check.tag = row
         if model.plan.softWindowOverlapHints.contains(task.id) {
-            check.title = "\(task.title)  [overlap]"
+            check.title = "\(task.title)  〔与日程重叠〕"
         }
         stack.addArrangedSubview(check)
 
         if !completed {
             let soft = NSPopUpButton()
-            soft.addItems(withTitles: ["Soft Window", "Morning", "Afternoon", "Evening", "Clear"])
+            soft.addItems(withTitles: ["软时段", "上午", "下午", "晚上", "清除"])
             soft.tag = row
             soft.target = self
             soft.action = #selector(softWindowChanged(_:))
             stack.addArrangedSubview(soft)
 
-            let back = NSButton(title: "Inbox", target: self, action: #selector(returnInbox(_:)))
+            let back = NSButton(title: "收件箱", target: self, action: #selector(returnInbox(_:)))
             back.tag = row
             stack.addArrangedSubview(back)
 
-            let remind = NSButton(title: "Remind +1h", target: self, action: #selector(remindHour(_:)))
+            let remind = NSButton(title: "提醒 +1 小时", target: self, action: #selector(remindHour(_:)))
             remind.tag = row
             stack.addArrangedSubview(remind)
 

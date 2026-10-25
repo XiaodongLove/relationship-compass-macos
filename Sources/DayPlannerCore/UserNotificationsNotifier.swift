@@ -8,7 +8,7 @@ public final class UserNotificationsNotifier: TaskNotifying, @unchecked Sendable
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         let content = UNMutableNotificationContent()
-        content.title = "Task Reminder"
+        content.title = "任务提醒"
         content.body = title
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)

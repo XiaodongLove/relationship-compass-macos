@@ -7,18 +7,25 @@ let package = Package(
     products: [
         .library(name: "DayPlannerCore", targets: ["DayPlannerCore"]),
         .executable(name: "DayPlanner", targets: ["DayPlannerApp"]),
-        .executable(name: "DayPlannerTests", targets: ["DayPlannerTests"]),
+        .executable(name: "DayPlannerTests", targets: ["DayPlannerTestRunner"]),
     ],
     targets: [
         .target(name: "DayPlannerCore"),
+        .target(
+            name: "DayPlannerSuite",
+            dependencies: ["DayPlannerCore"]
+        ),
         .executableTarget(
             name: "DayPlannerApp",
             dependencies: ["DayPlannerCore"]
         ),
         .executableTarget(
-            name: "DayPlannerTests",
-            dependencies: ["DayPlannerCore"],
-            path: "Tests/DayPlannerCoreTests"
+            name: "DayPlannerTestRunner",
+            dependencies: ["DayPlannerSuite"]
+        ),
+        .testTarget(
+            name: "DayPlannerCoreTests",
+            dependencies: ["DayPlannerSuite"]
         ),
     ]
 )
