@@ -1,19 +1,32 @@
 import AppKit
+import QuartzCore
 import DayPlannerCore
 
 final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
     private let model: AppModel
+
+    private let brandLabel = NSTextField(labelWithString: "每日工作计划")
     private let titleLabel = NSTextField(labelWithString: "")
-    private let emptyLabel = NSTextField(labelWithString: "今日计划为空 — 可添加任务，或先捕获到收件箱。")
+    private let subtitleLabel = NSTextField(labelWithString: "把今天要做的事排清楚，其余留在收件箱。")
+    private let emptyTitle = NSTextField(labelWithString: "这一天还很轻")
+    private let emptyBody = NSTextField(wrappingLabelWithString: "添加一条今日任务，或先捕获到收件箱，稍后再承诺进计划。")
+
+    private let headerBar = NSView()
+    private let composeBar = NSView()
+    private let planPanel = NSView()
+    private let inboxPanel = NSView()
+
     private let table = NSTableView()
     private let scroll = NSScrollView()
     private let inboxTable = NSTableView()
     private let inboxScroll = NSScrollView()
+    private let inboxHeading = NSTextField(labelWithString: "收件箱 / 逾期")
+
     private var rows: [Row] = []
-    private var inboxRows: [InboxItem] = []
     private var datePicker: NSDatePicker!
     private var addField: NSTextField!
     private var captureField: NSTextField!
+    private var gradientLayer: CAGradientLayer?
 
     private enum Row {
         case event(Event)
@@ -32,27 +45,55 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 720, height: 520))
+        let root = GradientView(frame: NSRect(x: 0, y: 0, width: 780, height: 580))
+        view = root
 
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        brandLabel.font = Theme.brandFont
+        brandLabel.textColor = Theme.ink
+        brandLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        titleLabel.font = Theme.titleFont
+        titleLabel.textColor = Theme.muted
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
-        emptyLabel.textColor = .secondaryLabelColor
 
-        configureTable(table)
-        configureTable(inboxTable)
-        scroll.documentView = table
-        inboxScroll.documentView = inboxTable
-        scroll.hasVerticalScroller = true
-        inboxScroll.hasVerticalScroller = true
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        inboxScroll.translatesAutoresizingMaskIntoConstraints = false
+        subtitleLabel.font = Theme.captionFont
+        subtitleLabel.textColor = Theme.muted
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        let todayButton = NSButton(title: "今天", target: self, action: #selector(goToday))
+        emptyTitle.font = Theme.titleFont
+        emptyTitle.textColor = Theme.ink
+        emptyTitle.alignment = .center
+        emptyTitle.translatesAutoresizingMaskIntoConstraints = false
+
+        emptyBody.font = Theme.bodyFont
+        emptyBody.textColor = Theme.muted
+        emptyBody.alignment = .center
+        emptyBody.maximumNumberOfLines = 3
+        emptyBody.translatesAutoresizingMaskIntoConstraints = false
+
+        Theme.stylePanel(planPanel)
+        Theme.stylePanel(inboxPanel)
+        planPanel.translatesAutoresizingMaskIntoConstraints = false
+        inboxPanel.translatesAutoresizingMaskIntoConstraints = false
+        headerBar.translatesAutoresizingMaskIntoConstraints = false
+        composeBar.translatesAutoresizingMaskIntoConstraints = false
+
+        configureTable(table, rowHeight: 36)
+        configureTable(inboxTable, rowHeight: 32)
+        styleScroll(scroll, document: table)
+        styleScroll(inboxScroll, document: inboxTable)
+
+        let todayButton = Theme.quietButton("今天")
+        todayButton.target = self
+        todayButton.action = #selector(goToday)
         todayButton.translatesAutoresizingMaskIntoConstraints = false
-        let ritualButton = NSButton(title: "日计划仪式", target: self, action: #selector(runRitual))
+        let ritualButton = Theme.quietButton("日计划仪式")
+        ritualButton.target = self
+        ritualButton.action = #selector(runRitual)
         ritualButton.translatesAutoresizingMaskIntoConstraints = false
-        let importButton = NSButton(title: "导入提醒事项", target: self, action: #selector(importReminders))
+        let importButton = Theme.quietButton("导入提醒事项")
+        importButton.target = self
+        importButton.action = #selector(importReminders)
         importButton.translatesAutoresizingMaskIntoConstraints = false
 
         let datePicker = NSDatePicker()
@@ -62,86 +103,161 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
         datePicker.target = self
         datePicker.action = #selector(dateChanged(_:))
         datePicker.translatesAutoresizingMaskIntoConstraints = false
+        datePicker.font = Theme.captionFont
         self.datePicker = datePicker
 
         addField = makeField(placeholder: "为当天新建任务", action: #selector(addTask))
-        let addButton = NSButton(title: "添加任务", target: self, action: #selector(addTask))
+        let addButton = Theme.primaryButton("添加任务")
+        addButton.target = self
+        addButton.action = #selector(addTask)
         addButton.translatesAutoresizingMaskIntoConstraints = false
 
         captureField = makeField(placeholder: "快速捕获到收件箱", action: #selector(capture))
-        let captureButton = NSButton(title: "捕获", target: self, action: #selector(capture))
+        let captureButton = Theme.quietButton("捕获")
+        captureButton.target = self
+        captureButton.action = #selector(capture)
         captureButton.translatesAutoresizingMaskIntoConstraints = false
 
-        let inboxLabel = NSTextField(labelWithString: "收件箱 / 逾期")
-        inboxLabel.font = .boldSystemFont(ofSize: 13)
-        inboxLabel.translatesAutoresizingMaskIntoConstraints = false
+        inboxHeading.font = Theme.sectionFont
+        inboxHeading.textColor = Theme.ink
+        inboxHeading.translatesAutoresizingMaskIntoConstraints = false
 
-        for v in [titleLabel, todayButton, ritualButton, importButton, datePicker, addField!, addButton, captureField!, captureButton, scroll, emptyLabel, inboxLabel, inboxScroll] {
-            view.addSubview(v)
-        }
+        let toolStack = NSStackView(views: [todayButton, ritualButton, importButton, datePicker])
+        toolStack.orientation = .horizontal
+        toolStack.spacing = 8
+        toolStack.alignment = .centerY
+        toolStack.translatesAutoresizingMaskIntoConstraints = false
+
+        headerBar.addSubview(brandLabel)
+        headerBar.addSubview(titleLabel)
+        headerBar.addSubview(subtitleLabel)
+        headerBar.addSubview(toolStack)
+
+        composeBar.addSubview(addField)
+        composeBar.addSubview(addButton)
+        composeBar.addSubview(captureField)
+        composeBar.addSubview(captureButton)
+
+        planPanel.addSubview(scroll)
+        planPanel.addSubview(emptyTitle)
+        planPanel.addSubview(emptyBody)
+
+        inboxPanel.addSubview(inboxHeading)
+        inboxPanel.addSubview(inboxScroll)
+
+        view.addSubview(headerBar)
+        view.addSubview(composeBar)
+        view.addSubview(planPanel)
+        view.addSubview(inboxPanel)
 
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 12),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            todayButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            todayButton.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 12),
-            ritualButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            ritualButton.leadingAnchor.constraint(equalTo: todayButton.trailingAnchor, constant: 8),
-            importButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            importButton.leadingAnchor.constraint(equalTo: ritualButton.trailingAnchor, constant: 8),
-            datePicker.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            datePicker.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            headerBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 20),
+            headerBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            headerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
 
-            addField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
-            addField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            addField.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -8),
+            brandLabel.topAnchor.constraint(equalTo: headerBar.topAnchor),
+            brandLabel.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
+
+            titleLabel.topAnchor.constraint(equalTo: brandLabel.bottomAnchor, constant: 4),
+            titleLabel.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
+
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
+            subtitleLabel.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
+            subtitleLabel.bottomAnchor.constraint(equalTo: headerBar.bottomAnchor),
+
+            toolStack.centerYAnchor.constraint(equalTo: brandLabel.centerYAnchor),
+            toolStack.trailingAnchor.constraint(equalTo: headerBar.trailingAnchor),
+
+            composeBar.topAnchor.constraint(equalTo: headerBar.bottomAnchor, constant: 16),
+            composeBar.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
+            composeBar.trailingAnchor.constraint(equalTo: headerBar.trailingAnchor),
+            composeBar.heightAnchor.constraint(equalToConstant: 72),
+
+            addField.topAnchor.constraint(equalTo: composeBar.topAnchor),
+            addField.leadingAnchor.constraint(equalTo: composeBar.leadingAnchor),
+            addField.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -10),
+            addField.heightAnchor.constraint(equalToConstant: 30),
             addButton.centerYAnchor.constraint(equalTo: addField.centerYAnchor),
-            addButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            addButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 88),
+            addButton.trailingAnchor.constraint(equalTo: composeBar.trailingAnchor),
+            addButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 96),
 
-            captureField.topAnchor.constraint(equalTo: addField.bottomAnchor, constant: 6),
+            captureField.topAnchor.constraint(equalTo: addField.bottomAnchor, constant: 8),
             captureField.leadingAnchor.constraint(equalTo: addField.leadingAnchor),
-            captureField.trailingAnchor.constraint(equalTo: captureButton.leadingAnchor, constant: -8),
+            captureField.trailingAnchor.constraint(equalTo: captureButton.leadingAnchor, constant: -10),
+            captureField.heightAnchor.constraint(equalToConstant: 30),
             captureButton.centerYAnchor.constraint(equalTo: captureField.centerYAnchor),
-            captureButton.trailingAnchor.constraint(equalTo: addButton.trailingAnchor),
+            captureButton.trailingAnchor.constraint(equalTo: composeBar.trailingAnchor),
             captureButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 72),
 
-            scroll.topAnchor.constraint(equalTo: captureField.bottomAnchor, constant: 10),
-            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
-            scroll.bottomAnchor.constraint(equalTo: inboxLabel.topAnchor, constant: -8),
-            scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 220),
+            planPanel.topAnchor.constraint(equalTo: composeBar.bottomAnchor, constant: 14),
+            planPanel.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
+            planPanel.trailingAnchor.constraint(equalTo: headerBar.trailingAnchor),
+            planPanel.bottomAnchor.constraint(equalTo: inboxPanel.topAnchor, constant: -14),
 
-            emptyLabel.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
-            emptyLabel.centerYAnchor.constraint(equalTo: scroll.centerYAnchor),
+            scroll.topAnchor.constraint(equalTo: planPanel.topAnchor, constant: 10),
+            scroll.leadingAnchor.constraint(equalTo: planPanel.leadingAnchor, constant: 10),
+            scroll.trailingAnchor.constraint(equalTo: planPanel.trailingAnchor, constant: -10),
+            scroll.bottomAnchor.constraint(equalTo: planPanel.bottomAnchor, constant: -10),
 
-            inboxLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            inboxLabel.bottomAnchor.constraint(equalTo: inboxScroll.topAnchor, constant: -4),
-            inboxScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            inboxScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
-            inboxScroll.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8),
-            inboxScroll.heightAnchor.constraint(equalToConstant: 140),
+            emptyTitle.centerXAnchor.constraint(equalTo: planPanel.centerXAnchor),
+            emptyTitle.centerYAnchor.constraint(equalTo: planPanel.centerYAnchor, constant: -14),
+            emptyBody.topAnchor.constraint(equalTo: emptyTitle.bottomAnchor, constant: 8),
+            emptyBody.centerXAnchor.constraint(equalTo: planPanel.centerXAnchor),
+            emptyBody.widthAnchor.constraint(lessThanOrEqualToConstant: 320),
+
+            inboxPanel.leadingAnchor.constraint(equalTo: headerBar.leadingAnchor),
+            inboxPanel.trailingAnchor.constraint(equalTo: headerBar.trailingAnchor),
+            inboxPanel.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
+            inboxPanel.heightAnchor.constraint(equalToConstant: 156),
+
+            inboxHeading.topAnchor.constraint(equalTo: inboxPanel.topAnchor, constant: 12),
+            inboxHeading.leadingAnchor.constraint(equalTo: inboxPanel.leadingAnchor, constant: 14),
+
+            inboxScroll.topAnchor.constraint(equalTo: inboxHeading.bottomAnchor, constant: 6),
+            inboxScroll.leadingAnchor.constraint(equalTo: inboxPanel.leadingAnchor, constant: 10),
+            inboxScroll.trailingAnchor.constraint(equalTo: inboxPanel.trailingAnchor, constant: -10),
+            inboxScroll.bottomAnchor.constraint(equalTo: inboxPanel.bottomAnchor, constant: -10),
         ])
 
         model.onChange = { [weak self] in self?.reload() }
         reload()
     }
 
-    private func configureTable(_ table: NSTableView) {
+    private func configureTable(_ table: NSTableView, rowHeight: CGFloat) {
         let column = NSTableColumn(identifier: .init("main"))
-        column.width = 680
+        column.width = 700
         table.addTableColumn(column)
         table.headerView = nil
         table.dataSource = self
         table.delegate = self
-        table.rowHeight = 28
+        table.rowHeight = rowHeight
+        table.backgroundColor = .clear
+        table.selectionHighlightStyle = .none
+        table.intercellSpacing = NSSize(width: 0, height: 4)
         table.target = self
         table.doubleAction = #selector(doubleClick(_:))
+        if #available(macOS 11.0, *) {
+            table.style = .plain
+        }
+    }
+
+    private func styleScroll(_ scroll: NSScrollView, document: NSTableView) {
+        scroll.documentView = document
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.automaticallyAdjustsContentInsets = false
+        scroll.contentInsets = NSEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
     }
 
     private func makeField(placeholder: String, action: Selector) -> NSTextField {
         let field = NSTextField()
         field.placeholderString = placeholder
+        field.font = Theme.bodyFont
+        field.isBezeled = true
+        field.bezelStyle = .roundedBezel
+        field.focusRingType = .default
         field.translatesAutoresizingMaskIntoConstraints = false
         field.target = self
         field.action = action
@@ -202,7 +318,7 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
 
         rows = []
         if !model.overdue.isEmpty && Calendar.current.isDateInToday(model.selectedDay) {
-            rows.append(.section("逾期（待分拣）"))
+            rows.append(.section("逾期 · 待分拣"))
             rows.append(contentsOf: model.overdue.map { .overdue($0) })
         }
         if !model.plan.events.isEmpty {
@@ -216,9 +332,10 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
             rows.append(contentsOf: model.plan.completedTasks.map { .completed($0) })
         }
 
-        inboxRows = model.inbox
         let empty = model.plan.openTasks.isEmpty && model.plan.completedTasks.isEmpty && model.plan.events.isEmpty
-        emptyLabel.isHidden = !empty
+            && !(Calendar.current.isDateInToday(model.selectedDay) && !model.overdue.isEmpty)
+        emptyTitle.isHidden = !empty
+        emptyBody.isHidden = !empty
         table.reloadData()
         inboxTable.reloadData()
     }
@@ -232,65 +349,125 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         if tableView === inboxTable {
-            if row < model.inbox.count {
-                let item = model.inbox[row]
-                return NSTextField(labelWithString: "📥 \(item.title)  （双击 → 承诺到所选日）")
-            }
-            let overdue = model.overdue[row - model.inbox.count]
-            return NSTextField(labelWithString: "⏰ \(overdue.title)  （双击 → 挪到今天）")
+            return inboxRowView(row: row)
         }
 
         switch rows[row] {
         case .section(let title):
-            let label = NSTextField(labelWithString: title)
-            label.font = .boldSystemFont(ofSize: 12)
-            label.textColor = .secondaryLabelColor
-            return label
+            return sectionLabel(title)
         case .event(let event):
             let tf = DateFormatter()
             tf.locale = Locale(identifier: "zh_CN")
             tf.timeStyle = .short
-            return NSTextField(labelWithString: "📅 \(event.title)  \(tf.string(from: event.start))–\(tf.string(from: event.end))")
+            let label = NSTextField(labelWithString: "\(event.title)    \(tf.string(from: event.start)) – \(tf.string(from: event.end))")
+            label.font = Theme.bodyFont
+            label.textColor = Theme.muted
+            return label
         case .open(let task):
             return taskControl(task: task, completed: false, row: row)
         case .completed(let task):
             return taskControl(task: task, completed: true, row: row)
         case .overdue(let task):
-            let button = NSButton(title: "→ 今天：\(task.title)", target: self, action: #selector(promoteOverdue(_:)))
+            let button = Theme.quietButton("挪到今天 · \(task.title)")
+            button.target = self
+            button.action = #selector(promoteOverdue(_:))
             button.tag = row
+            button.font = Theme.bodyFont
             return button
         }
+    }
+
+    private func inboxRowView(row: Int) -> NSView {
+        let wrap = NSView()
+        wrap.wantsLayer = true
+        wrap.layer?.cornerRadius = 8
+        wrap.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.45).cgColor
+
+        let label = NSTextField(labelWithString: "")
+        label.font = Theme.bodyFont
+        label.textColor = Theme.ink
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let hint = NSTextField(labelWithString: "")
+        hint.font = Theme.captionFont
+        hint.textColor = Theme.muted
+        hint.translatesAutoresizingMaskIntoConstraints = false
+
+        if row < model.inbox.count {
+            label.stringValue = model.inbox[row].title
+            hint.stringValue = "双击承诺到所选日"
+        } else {
+            let overdue = model.overdue[row - model.inbox.count]
+            label.stringValue = overdue.title
+            hint.stringValue = "逾期 · 双击挪到今天"
+            wrap.layer?.backgroundColor = Theme.sand.withAlphaComponent(0.35).cgColor
+        }
+
+        wrap.addSubview(label)
+        wrap.addSubview(hint)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 10),
+            label.centerYAnchor.constraint(equalTo: wrap.centerYAnchor),
+            hint.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -10),
+            hint.centerYAnchor.constraint(equalTo: wrap.centerYAnchor),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: hint.leadingAnchor, constant: -8),
+            wrap.heightAnchor.constraint(equalToConstant: 28),
+        ])
+        return wrap
+    }
+
+    private func sectionLabel(_ title: String) -> NSView {
+        let label = NSTextField(labelWithString: title.uppercased(with: Locale(identifier: "zh_CN")))
+        // Keep Chinese as-is; uppercased is no-op for CJK
+        label.stringValue = title
+        label.font = Theme.sectionFont
+        label.textColor = Theme.accent
+        return label
     }
 
     private func taskControl(task: DayPlannerCore.Task, completed: Bool, row: Int) -> NSView {
         let stack = NSStackView()
         stack.orientation = .horizontal
-        stack.spacing = 8
+        stack.spacing = 6
+        stack.alignment = .centerY
+
         let check = NSButton(checkboxWithTitle: task.title, target: self, action: #selector(toggleTask(_:)))
+        check.font = Theme.bodyFont
         check.state = completed ? .on : .off
         check.tag = row
+        if completed {
+            check.contentTintColor = Theme.muted
+        }
         if model.plan.softWindowOverlapHints.contains(task.id) {
-            check.title = "\(task.title)  〔与日程重叠〕"
+            check.title = "\(task.title)  · 与日程重叠"
         }
         stack.addArrangedSubview(check)
+        (stack.views.first as? NSView)?.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         if !completed {
             let soft = NSPopUpButton()
+            soft.font = Theme.captionFont
             soft.addItems(withTitles: ["软时段", "上午", "下午", "晚上", "清除"])
             soft.tag = row
             soft.target = self
             soft.action = #selector(softWindowChanged(_:))
+            soft.setContentHuggingPriority(.required, for: .horizontal)
             stack.addArrangedSubview(soft)
 
-            let back = NSButton(title: "收件箱", target: self, action: #selector(returnInbox(_:)))
+            let back = Theme.quietButton("收件箱")
+            back.target = self
+            back.action = #selector(returnInbox(_:))
             back.tag = row
             stack.addArrangedSubview(back)
 
-            let remind = NSButton(title: "提醒 +1 小时", target: self, action: #selector(remindHour(_:)))
+            let remind = Theme.quietButton("+1小时")
+            remind.target = self
+            remind.action = #selector(remindHour(_:))
             remind.tag = row
             stack.addArrangedSubview(remind)
 
-            let up = NSButton(title: "↑", target: self, action: #selector(bumpTaskUp(_:)))
+            let up = Theme.quietButton("上移")
+            up.target = self
+            up.action = #selector(bumpTaskUp(_:))
             up.tag = row
             stack.addArrangedSubview(up)
         }
@@ -341,5 +518,32 @@ final class DayPlanViewController: NSViewController, NSTableViewDataSource, NSTa
     @objc private func promoteOverdue(_ sender: NSButton) {
         guard let task = taskAtRow(sender.tag) else { return }
         model.moveOverdueToToday(task)
+    }
+}
+
+final class GradientView: NSView {
+    private let gradient = CAGradientLayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        gradient.colors = [
+            NSColor(calibratedRed: 0.90, green: 0.95, blue: 0.94, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.96, green: 0.94, blue: 0.89, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.88, green: 0.93, blue: 0.96, alpha: 1).cgColor,
+        ]
+        gradient.locations = [0, 0.5, 1]
+        gradient.startPoint = CGPoint(x: 0.05, y: 1)
+        gradient.endPoint = CGPoint(x: 0.95, y: 0)
+        layer = CALayer()
+        layer?.addSublayer(gradient)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func layout() {
+        super.layout()
+        gradient.frame = bounds
     }
 }
